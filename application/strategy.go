@@ -43,7 +43,7 @@ func (edf *EarliestDeadlineFirstStrategy) AssignPower(ports []*domain.ChargingPo
 	}
 	allocation := make([]float64, len(ports))
 	remaining := stationCapacity
-	for i, port := range sorted {
+	for _, port := range sorted {
 		idx := findPortIndex(ports, port)
 		need := port.EV.MaxChargeRate
 		if need > remaining {

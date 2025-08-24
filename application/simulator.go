@@ -8,6 +8,7 @@ type Simulator struct {
 	Station      *domain.ChargingStation
 	CurrentTime  int // minute count
 	TimeStepMins int
+	Strategy     ChargingStrategy
 }
 
 func NewSimulator(station *domain.ChargingStation, timeStepMins int) *Simulator {
@@ -16,6 +17,10 @@ func NewSimulator(station *domain.ChargingStation, timeStepMins int) *Simulator 
 		CurrentTime:  0,
 		TimeStepMins: timeStepMins,
 	}
+}
+
+func (s *Simulator) SetStrategy(strategy ChargingStrategy) {
+	s.Strategy = strategy
 }
 
 // Step advances the simulation by one time step, distributing available power among connected EVs.
@@ -60,6 +65,39 @@ func (s *Simulator) Step() {
 		ev.StateOfCharge += actualCharge
 		if ev.StateOfCharge > ev.TargetCharge {
 			ev.StateOfCharge = ev.TargetCharge // Cap at target charge
+		}
+	}
+}
+
+func (s *Simulator) StepWithStrategy() {
+	var connectedPorts []*domain.ChargingPort
+	for _, port := range s.Station.Ports {
+		if port.Occupied && port.EV != nil {
+			connectedPorts = append(connectedPorts, port)
+		}
+	}
+
+	n := float64(len(connectedPorts))
+	if n == 0 {
+		s.CurrentTime += s.TimeStepMins
+		return // No EVs to charge
+	}
+
+	var allocations []float64
+	if s.Strategy != nil {
+		allocations = s.Strategy.AssignPower(connectedPorts, s.Station.TotalCapacity)
+	} else {
+		//default to equal distribution
+		s.SetStrategy(&EqualSharingStrategy{})
+		allocations = s.Strategy.AssignPower(connectedPorts, s.Station.TotalCapacity)
+	}
+
+	for i, port := range connectedPorts {
+		assignedPower := allocations[i]
+		energyDelivered := assignedPower * float64(s.TimeStepMins) / 60.0 // kWh for this timestep
+		port.EV.StateOfCharge += energyDelivered
+		if port.EV.StateOfCharge > port.EV.TargetCharge {
+			port.EV.StateOfCharge = port.EV.TargetCharge // Cap at target charge
 		}
 	}
 }
