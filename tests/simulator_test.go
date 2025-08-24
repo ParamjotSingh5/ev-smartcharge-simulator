@@ -53,3 +53,40 @@ func TestStepSimulation(t *testing.T) {
 		t.Error("EV should have reached target charge before deadline")
 	}
 }
+
+func TestEqualShareStrategy(t *testing.T) {
+	ev1 := &domain.EV{ID: 1, MaxChargeRate: 11}
+	ev2 := &domain.EV{ID: 2, MaxChargeRate: 22}
+	ports := []*domain.ChargingPort{
+		{ID: 1, Occupied: true, EV: ev1},
+		{ID: 2, Occupied: true, EV: ev2},
+	}
+	strat := &application.EqualSharingStrategy{}
+	allocations := strat.AssignPower(ports, 40)
+	if allocations[0] != 11 {
+		t.Errorf("Expected EV1 to be capped at 11 kW, got %v", allocations[0])
+	}
+	if allocations[1] != 20 {
+		t.Errorf("Expected EV2 to get 20 kW, got %v", allocations[1])
+	}
+
+	t.Logf("Allocations: EV1: %v kW, EV2: %v kW", allocations[0], allocations[1])
+}
+
+func TestEarliestDeadlineStrategy(t *testing.T) {
+	ev1 := &domain.EV{ID: 1, MaxChargeRate: 11, Deadline: 30}
+	ev2 := &domain.EV{ID: 2, MaxChargeRate: 22, Deadline: 60}
+	ports := []*domain.ChargingPort{
+		{ID: 1, Occupied: true, EV: ev1},
+		{ID: 2, Occupied: true, EV: ev2},
+	}
+	strat := &application.EarliestDeadlineFirstStrategy{}
+	allocations := strat.AssignPower(ports, 20)
+	// EV1 should be prioritized
+	if allocations[0] != 11 {
+		t.Errorf("Expected EV1 to get 11 kW, got %v", allocations[0])
+	}
+	if allocations[1] != 9 {
+		t.Errorf("Expected EV2 to get remaining 9 kW, got %v", allocations[1])
+	}
+}

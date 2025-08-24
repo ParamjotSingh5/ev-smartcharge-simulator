@@ -21,11 +21,9 @@ func main() {
 	ev1 := &domain.EV{ID: 1, StateOfCharge: 10, TargetCharge: 50, MaxChargeRate: 22, Deadline: 40}
 	ev2 := &domain.EV{ID: 2, StateOfCharge: 20, TargetCharge: 60, MaxChargeRate: 11, Deadline: 80}
 	ev3 := &domain.EV{ID: 3, StateOfCharge: 30, TargetCharge: 70, MaxChargeRate: 7, Deadline: 20}
-	ev4 := &domain.EV{ID: 4, StateOfCharge: 40, TargetCharge: 80, MaxChargeRate: 50, Deadline: 60}
 
 	sim.AddEV(1, ev2)
 	sim.AddEV(2, ev3)
-	sim.AddEV(0, ev4)
 	sim.AddEV(0, ev1)
 
 	for i := 0; i < 10; i++ {
