@@ -69,37 +69,45 @@ func (s *Simulator) Step() {
 	}
 }
 
-func (s *Simulator) StepWithStrategy() {
+func (s *Simulator) StepWithStrategy(gridNeeds float64) {
+	// gridNeeds: negative for grid needing power (V2G), positive for normal charging
+
 	var connectedPorts []*domain.ChargingPort
 	for _, port := range s.Station.Ports {
 		if port.Occupied && port.EV != nil {
 			connectedPorts = append(connectedPorts, port)
 		}
 	}
-
-	n := float64(len(connectedPorts))
-	if n == 0 {
+	if len(connectedPorts) == 0 {
 		s.CurrentTime += s.TimeStepMins
-		return // No EVs to charge
+		return
 	}
 
-	var allocations []float64
+	var assignments []PowerAssignment
 	if s.Strategy != nil {
-		allocations = s.Strategy.AssignPower(connectedPorts, s.Station.TotalCapacity)
+		assignments = s.Strategy.AssignPower(connectedPorts, s.Station.TotalCapacity, gridNeeds)
 	} else {
-		//default to equal distribution
-		s.SetStrategy(&EqualSharingStrategy{})
-		allocations = s.Strategy.AssignPower(connectedPorts, s.Station.TotalCapacity)
+		// fallback if not set
 	}
 
 	for i, port := range connectedPorts {
-		assignedPower := allocations[i]
-		energyDelivered := assignedPower * float64(s.TimeStepMins) / 60.0 // kWh for this timestep
+		assign := assignments[i]
+		// Charging (assign.Power > 0), or Discharging (assign.Power < 0)
+		energyDelivered := assign.Power * float64(s.TimeStepMins) / 60.0 // kWh (neg or pos)
 		port.EV.StateOfCharge += energyDelivered
-		if port.EV.StateOfCharge > port.EV.TargetCharge {
-			port.EV.StateOfCharge = port.EV.TargetCharge // Cap at target charge
+		// Clamp values
+		if port.EV.StateOfCharge > port.EV.TargetCharge && assign.Power < 0 {
+			port.EV.StateOfCharge = port.EV.TargetCharge
 		}
+		if port.EV.StateOfCharge > port.EV.TargetCharge && assign.Power > 0 {
+			port.EV.StateOfCharge = port.EV.TargetCharge
+		}
+		if port.EV.StateOfCharge < 0 {
+			port.EV.StateOfCharge = 0
+		}
+		// handle EV departure if charge/discharge is done
 	}
+	s.CurrentTime += s.TimeStepMins
 }
 
 // AddEV connects an EV to a specified port if it's available.
